@@ -78,3 +78,21 @@ final tank temperature
 total pump runtime
 
 temperature curve over the whole period
+
+
+Model Equations
+
+Solar irradiance:
+I(t) = I_peak * sin( π * (t_day / t_sun) )
+
+Temperature-dependent efficiency:
+eta(T) = eta_base - 0.002 * (T - 25)
+
+Solar gain:
+Q_solar = A * I(t) * eta(T)
+
+Heat loss:
+Q_loss = k * (T - T_amb)
+
+Energy balance:
+T_new = T_old + (Q_solar - Q_loss) / (m * c_p) * dt
