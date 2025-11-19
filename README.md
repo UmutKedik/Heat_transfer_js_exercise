@@ -80,7 +80,7 @@ total pump runtime
 temperature curve over the whole period
 
 
-## Model Equations
+## 📐 Model Equations
 
 Solar irradiance:
 I(t) = I_peak * sin( π * (t_day / t_sun) )
