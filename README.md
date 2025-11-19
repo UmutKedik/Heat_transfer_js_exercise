@@ -1,4 +1,4 @@
-This small project is something I built to play around with how a solar-heated water tank might behave over time.
+☀️This small project is something I built to play around with how a solar-heated water tank might behave over time.
 The goal wasn’t to create a perfect scientific model, but to have a simple browser-based simulation where you can change a few parameters and see how the tank temperature moves. Everything runs inside the browser—no backend, no frameworks, just plain JS + a chart.
 
 I tried to keep the logic readable so I can adjust things later if needed.
