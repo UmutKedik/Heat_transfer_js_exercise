@@ -1,92 +1,81 @@
-// script.js
-
-// ---- Simülasyon sınıfı (fizik tarafı) ----
+// small sim class
 class SolarTankSimulator {
-    constructor(options) {
-        this.Panel_area = options.Panel_area;
-        this.Tank_Volume = options.Tank_Volume;
-        this.Daily_avg_temp = options.Daily_avg_temp;
-        this.Daily_sun_time_hours = options.Daily_sun_time_hours;
-        this.days = options.days;
-        this.basePanelEfficiency = options.basePanelEfficiency;
-        this.Solar_peak = options.Solar_peak;
-        this.baseTankHeatLoss = options.baseTankHeatLoss;
+    constructor(opts) {
+        // take values from form
+        this.Panel_area = opts.Panel_area;
+        this.Tank_Volume = opts.Tank_Volume;
+        this.Daily_avg_temp = opts.Daily_avg_temp;
+        this.Daily_sun_time_hours = opts.Daily_sun_time_hours;
+        this.Simulation_hours = opts.Simulation_hours;
+        this.basePanelEfficiency = opts.basePanelEfficiency;
+        this.Solar_peak = opts.Solar_peak;
+        this.baseTankHeatLoss = opts.baseTankHeatLoss;
+        this.Starting_tank_temp = opts.Starting_tank_temp;
 
-        // Sabitler
-        this.Starting_tank_temp = 12.0;   // °C
-        this.dt = 60.0;                   // saniye – 1 dakikalık adım
-        this.densityWater = 1.0;          // 1 L = 1 kg
-        this.heatCapacityWater = 4180.0;  // J/(kg·K)
+        // constants
+        this.dt = 60;                 // timestep in seconds (1 min)
+        this.densityWater = 1.0;      // assume 1L = 1kg
+        this.heatCapacityWater = 4180.0;
     }
 
     run() {
         const massWaterTank = this.Tank_Volume * this.densityWater;
-        const sim_time = Math.floor(this.days * 24 * 3600);
+        const sim_time = Math.floor(this.Simulation_hours * 3600); // hours to sec
         const sunDuration = this.Daily_sun_time_hours * 3600;
 
         let TankTemp = this.Starting_tank_temp;
-        let Pump_hours = 0.0;
-        let t = 0.0;
-        let day_index = 0;
+        let Pump_hours = 0;
+        let t = 0;
 
         const timeHours = [];
         const temps = [];
-        const dailyTemps = [];
 
+        // basic time loop
         while (t <= sim_time) {
-            const timeOfDay = t % 86400;
-            let Heat_input_from_solar = 0.0;
+            const timeOfDay = t % 86400; // seconds inside one day
+            let Heat_input_from_solar = 0;
 
-            // Güneş var mı? Varsa sinüs şeklinde değişen ışınım
+            // when sun is up we add energy
             if (timeOfDay < sunDuration) {
-                const dayProgress = timeOfDay / sunDuration;           // 0–1
-                let sunShape = Math.sin(Math.PI * dayProgress);       // 0 -> 1 -> 0
-                if (sunShape < 0) {
-                    sunShape = 0;
-                }
+                const dayProgress = timeOfDay / sunDuration;
+                let sunShape = Math.sin(Math.PI * dayProgress); // rough shape
+                if (sunShape < 0) { sunShape = 0; }
+
                 const currentIrradiance = this.Solar_peak * sunShape;
 
-                // Panel verimi tank sıcaklığına bağlı
-                let panelEfficiency = this.basePanelEfficiency - 0.002 * (TankTemp - 25.0);
-                if (panelEfficiency < 0.5) {
-                    panelEfficiency = 0.5;
-                }
-                if (panelEfficiency > 0.9) {
-                    panelEfficiency = 0.9;
-                }
+                // panel make less good when temp high
+                let panelEfficiency =
+                    this.basePanelEfficiency - 0.002 * (TankTemp - 25);
 
-                Heat_input_from_solar = this.Panel_area * currentIrradiance * panelEfficiency;
-                Pump_hours += this.dt / 3600.0;
+                if (panelEfficiency < 0.5) panelEfficiency = 0.5;
+                else if (panelEfficiency > 0.9) panelEfficiency = 0.9;
+
+                Heat_input_from_solar =
+                    this.Panel_area * currentIrradiance * panelEfficiency;
+
+                Pump_hours += this.dt / 3600;
             }
 
-            // Dinamik ısı kaybı
+            // heat go out when tank hotter than air
             const tempDifference = TankTemp - this.Daily_avg_temp;
             let tankHeatLoss = this.baseTankHeatLoss;
 
             if (tempDifference > 0) {
-                const factor = Math.min(0.5, (tempDifference / 40.0) * 0.5);
+                let factor = (tempDifference / 40) * 0.5; // just guess curve
+                if (factor > 0.5) factor = 0.5;
                 tankHeatLoss = this.baseTankHeatLoss * (1 + factor);
             }
 
             const Heat_loss_to_environment = tankHeatLoss * tempDifference;
 
-            // Sıcaklık güncelle
+            // very simple energy balance
             TankTemp += (Heat_input_from_solar - Heat_loss_to_environment) *
                 this.dt / (massWaterTank * this.heatCapacityWater);
 
-            // Grafiği şişirmemek için sadece HER SAATTE bir nokta ekle
-            if (Math.floor(t) % 3600 === 0) {
+            // save only one point each hour for chart, otherwise too heavy
+            if ((t % 3600) === 0) {
                 timeHours.push(t / 3600);
                 temps.push(TankTemp);
-            }
-
-            // Gün sonu için tablo kaydı
-            if (t > 0 && (t % 86400) === 0) {
-                day_index += 1;
-                dailyTemps.push({
-                    day: day_index,
-                    temp: TankTemp
-                });
             }
 
             t += this.dt;
@@ -95,15 +84,14 @@ class SolarTankSimulator {
         return {
             finalTemp: TankTemp,
             pumpHours: Pump_hours,
-            daysSimulated: this.days,
+            hoursSimulated: this.Simulation_hours,
             timeHours: timeHours,
-            temps: temps,
-            dailyTemps: dailyTemps
+            temps: temps
         };
     }
 }
 
-// ---- UI / uygulama sınıfı ----
+// simple ui controller
 class TankSimulationApp {
     constructor() {
         this.tempChart = null;
@@ -113,97 +101,72 @@ class TankSimulationApp {
     }
 
     init() {
-        if (!this.runButton) {
-            return;
-        }
-        this.runButton.addEventListener("click", () => {
-            this.handleRunClick();
-        });
+        const btn = this.runButton;
+        if (!btn) return;
+
+        //handler with bind
+        btn.addEventListener("click", this.handleRunClick.bind(this));
     }
 
     handleRunClick() {
-        if (this.errorDiv) {
-            this.errorDiv.textContent = "";
-        }
-        if (this.resultsDiv) {
-            this.resultsDiv.innerHTML = "";
-        }
+        if (this.errorDiv) this.errorDiv.textContent = "";
+        if (this.resultsDiv) this.resultsDiv.innerHTML = "";
 
         const inputResult = this.readAndValidateInputs();
+
         if (!inputResult.ok) {
-            if (this.errorDiv) {
-                this.errorDiv.textContent = inputResult.message;
-            }
+            if (this.errorDiv) this.errorDiv.textContent = inputResult.message;
             return;
         }
 
         const simParams = inputResult.values;
+        const sim = new SolarTankSimulator(simParams);
+        const result = sim.run();
 
-        const simulator = new SolarTankSimulator(simParams);
-        const simulationResult = simulator.run();
-
-        this.showResults(simulationResult);
-        this.drawTemperatureChart(simulationResult.timeHours, simulationResult.temps);
+        this.showResults(result);
+        this.drawTemperatureChart(result.timeHours, result.temps);
     }
 
     readAndValidateInputs() {
-        const Panel_area = parseFloat(this.getValue("panelArea"));
-        const Tank_Volume = parseFloat(this.getValue("tankVolume"));
-        const Daily_avg_temp = parseFloat(this.getValue("avgTemp"));
-        const Daily_sun_time_hours = parseFloat(this.getValue("sunHours"));
-        let days = parseFloat(this.getValue("days"));
-        const basePanelEfficiency = parseFloat(this.getValue("baseEfficiency"));
-        const Solar_peak = parseFloat(this.getValue("peakIrradiance"));
-        const baseTankHeatLoss = parseFloat(this.getValue("baseLoss"));
+        const Panel_area = parseFloat(this._val("panelArea"));
+        const Tank_Volume = parseFloat(this._val("tankVolume"));
+        const Daily_avg_temp = parseFloat(this._val("avgTemp"));
+        const Daily_sun_time_hours = parseFloat(this._val("sunHours"));
+        const Simulation_hours = parseFloat(this._val("simHours"));
+        const basePanelEfficiency = parseFloat(this._val("baseEfficiency"));
+        const Solar_peak = parseFloat(this._val("peakIrradiance"));
+        const baseTankHeatLoss = parseFloat(this._val("baseLoss"));
+        const Starting_tank_temp = parseFloat(this._val("startingTemp"));
 
-        if (
-            isNaN(Panel_area) || isNaN(Tank_Volume) || isNaN(Daily_avg_temp) ||
-            isNaN(Daily_sun_time_hours) || isNaN(days) ||
-            isNaN(basePanelEfficiency) || isNaN(Solar_peak) || isNaN(baseTankHeatLoss)
-        ) {
-            return {
-                ok: false,
-                message: "Error: Please fill in all fields with valid numbers."
-            };
+        const arr = [
+            Panel_area, Tank_Volume, Daily_avg_temp,
+            Daily_sun_time_hours, Simulation_hours,
+            basePanelEfficiency, Solar_peak,
+            baseTankHeatLoss, Starting_tank_temp
+        ];
+
+        if (arr.some(n => isNaN(n))) {
+            return { ok: false, message: "Error: some field not number value." };
         }
 
         if (Panel_area <= 0 || Tank_Volume <= 0 || Daily_sun_time_hours <= 0) {
-            return {
-                ok: false,
-                message: "Error: Panel area, tank volume, and sunlight duration must be positive numbers."
-            };
+            return { ok: false, message: "Panel area, tank volume and sunlight must be > 0." };
         }
 
-        if (days <= 0) {
-            return {
-                ok: false,
-                message: "Error: Number of days must be positive."
-            };
-        }
-
-        if (days > 30) {
-            days = 30;
+        if (Simulation_hours <= 0) {
+            return { ok: false, message: "Simulation hours need positive value." };
         }
 
         if (basePanelEfficiency <= 0 || basePanelEfficiency > 1) {
-            return {
-                ok: false,
-                message: "Error: Base panel efficiency must be between 0 and 1."
-            };
+            return { ok: false, message: "Panel efficiency should stay between 0 and 1." };
         }
 
         if (Solar_peak <= 0) {
-            return {
-                ok: false,
-                message: "Error: Peak solar irradiance must be positive."
-            };
+            return { ok: false, message: "Peak irradiance must be more than zero." };
         }
 
         if (baseTankHeatLoss <= 0) {
-            return {
-                ok: false,
-                message: "Error: Base tank heat loss coefficient must be positive."
-            };
+            return { ok: false, message: "Heat loss coefficient must be > 0." };
         }
 
         return {
@@ -213,73 +176,57 @@ class TankSimulationApp {
                 Tank_Volume: Tank_Volume,
                 Daily_avg_temp: Daily_avg_temp,
                 Daily_sun_time_hours: Daily_sun_time_hours,
-                days: days,
+                Simulation_hours: Simulation_hours,
                 basePanelEfficiency: basePanelEfficiency,
                 Solar_peak: Solar_peak,
-                baseTankHeatLoss: baseTankHeatLoss
+                baseTankHeatLoss: baseTankHeatLoss,
+                Starting_tank_temp: Starting_tank_temp
             }
         };
     }
 
-    getValue(id) {
+    _val(id) {
         const el = document.getElementById(id);
         return el ? el.value : "";
     }
 
     showResults(simulationResult) {
-        if (!this.resultsDiv) {
-            return;
-        }
+        const r = simulationResult;
 
-        const finalTempText =
+        const finalText =
             "Final tank temperature after " +
-            simulationResult.daysSimulated +
-            " days: <b>" +
-            simulationResult.finalTemp.toFixed(2) +
+            r.hoursSimulated.toFixed(1) +
+            " hours: <b>" +
+            r.finalTemp.toFixed(2) +
             " °C</b>";
 
-        const pumpHoursText =
+        const pumpText =
             "Pump ran for <b>" +
-            simulationResult.pumpHours.toFixed(2) +
+            r.pumpHours.toFixed(2) +
             " hours</b> in total.";
 
-        let dailyTableHtml = "";
-        if (simulationResult.dailyTemps && simulationResult.dailyTemps.length > 0) {
-            dailyTableHtml += "<h3>Daily Tank Temperatures</h3>";
-            dailyTableHtml += "<table><thead><tr><th>Day</th><th>Tank Temperature (°C)</th></tr></thead><tbody>";
-
-            simulationResult.dailyTemps.forEach(function (item) {
-                dailyTableHtml +=
-                    "<tr><td>" +
-                    item.day +
-                    "</td><td>" +
-                    item.temp.toFixed(2) +
-                    "</td></tr>";
-            });
-
-            dailyTableHtml += "</tbody></table>";
+        if (this.resultsDiv) {
+            this.resultsDiv.innerHTML =
+                "<h2>Results</h2><p>" +
+                finalText +
+                "</p><p>" +
+                pumpText +
+                "</p>";
         }
-
-        this.resultsDiv.innerHTML =
-            "<h2>Results</h2>" +
-            "<p>" + finalTempText + "</p>" +
-            "<p>" + pumpHoursText + "</p>" +
-            dailyTableHtml +
-            "<p class='small-text'>Note: This is a simplified engineering model with non-uniform solar irradiance, " +
-            "temperature-dependent panel efficiency and dynamic heat loss.</p>";
     }
 
     drawTemperatureChart(timeHours, temps) {
         const canvas = document.getElementById("tempChart");
-        if (!canvas) {
-            return;
-        }
+        if (!canvas) return;
+
         const ctx = canvas.getContext("2d");
 
-        if (this.tempChart !== null) {
+        if (this.tempChart) {
             this.tempChart.destroy();
+            this.tempChart = null;
         }
 
+        //chart config
         this.tempChart = new Chart(ctx, {
             type: "line",
             data: {
@@ -292,10 +239,7 @@ class TankSimulationApp {
             },
             options: {
                 responsive: true,
-                interaction: {
-                    mode: "index",
-                    intersect: false
-                },
+                interaction: { mode: "index", intersect: false },
                 plugins: {
                     legend: {
                         display: true
@@ -320,8 +264,27 @@ class TankSimulationApp {
     }
 }
 
-// Sayfa yüklendiğinde uygulamayı başlat
-window.addEventListener("DOMContentLoaded", function () {
-    const app = new TankSimulationApp();
-    app.init();
-});
+// small bootstrap for app
+(function () {
+
+    // this function just create app and run
+    function startSimApp() {
+        // avoid create two time if browser call again
+        if (window._tankAppStarted) {
+            return;
+        }
+        window._tankAppStarted = true;
+
+        var appObj = new TankSimulationApp();  // make new app object
+        appObj.init();                        // call init
+    }
+
+    // if document already loaded,just run little later
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+        setTimeout(startSimApp, 0);
+    } else {
+        // normal case, wait dom ready and then start
+        document.addEventListener("DOMContentLoaded", startSimApp);
+    }
+
+})();
