@@ -39,7 +39,7 @@ Then it records one value per hour so the chart doesn’t explode.
 
 HTML – simple form + layout
 
-CSS – small dark theme
+CSS – for styling
 
 JavaScript – all logic lives here
 
