@@ -46,18 +46,23 @@ class SolarTankSimulator {
             // when sun is up we add energy
             if (timeOfDay < sunDuration) {
                 const dayProgress = timeOfDay / sunDuration;
-                let sunShape = Math.sin(Math.PI * dayProgress); // rough shape
+
+                // more realistic day shape
+                let sunShape = Math.pow(Math.sin(Math.PI * dayProgress), 1.3); 
                 if (sunShape < 0) { sunShape = 0; }
 
-                const currentIrradiance = this.Solar_peak * sunShape;
+                // small random cloud factor
+                const cloudFactor = 1 - (Math.random() * 0.15); // 0–15% drop
+
+                const currentIrradiance = this.Solar_peak * sunShape * cloudFactor;
                 
                 PanelTemp = this.Daily_avg_temp + (currentIrradiance / this.Solar_peak) * 30;
 
-                // panel make less good when temp high
+                //  use panel temperature
                 let panelEfficiency =
-                    this.basePanelEfficiency - 0.002 * (TankTemp - 25);
+                    this.basePanelEfficiency * (1 - 0.0035 * (PanelTemp - 25));
 
-                if (panelEfficiency < 0.5) panelEfficiency = 0.5;
+                if (panelEfficiency < 0.3) panelEfficiency = 0.3;
                 else if (panelEfficiency > 0.9) panelEfficiency = 0.9;
 
                 Heat_input_from_solar =
@@ -68,14 +73,14 @@ class SolarTankSimulator {
                 totalE += Heat_input_from_solar * this.dt; // W*s = J
             }
             else {
-              PanelTemp = this.Daily_avg_temp;
+              PanelTemp = this.Daily_avg_temp; // <-- yeni
           }
 
             // heat go out when tank hotter than air
             const tempDifference = TankTemp - this.Daily_avg_temp;
 
             // auto base heat-loss coefficient from area + insulation thickness
-             const lambda = 0.035; // W/mK (fixed average insulation conductivity)
+            const lambda = 0.035; // W/mK (fixed average insulation conductivity)
             let baseLossCoeff = (lambda / this.insulationThickness) * this.Tank_area; // W/K
 
             let tankHeatLoss = baseLossCoeff;
@@ -313,7 +318,7 @@ class TankSimulationApp {
                     y: {
                         title: {
                             display: true,
-                            text: "Tank Temperature (°C)"
+                            text: "Temperature (°C)"
                         }
                     }
                 }
@@ -321,27 +326,27 @@ class TankSimulationApp {
         });
     }
 
-    // csv download
-  downloadCsv() {
-            if (!this.lastResult) {
-                alert("Please simulate first.");
-                return;
-            }
+        // csv download
+        downloadCsv() {
+                if (!this.lastResult) {
+                    alert("Please simulate first.");
+                  return;
+                }
 
-          var r = this.lastResult;
-        var text = "time_hours,tank_temp_C,panel_temp_C\n";
+        var r = this.lastResult;
+          var text = "time_hours,tank_temp_C,panel_temp_C\n";
 
         var times = r.timeHours || [];
-          var temps = r.temps || [];
+        var temps = r.temps || [];
         var panelTemps = r.panelTemps || []; // include panel temps in csv
 
-        for (var i = 0; i < times.length; i++) {
-            text +=
-                times[i].toFixed(2) + "," +
-                temps[i].toFixed(2) + "," +
-                (panelTemps[i] !== undefined ? panelTemps[i].toFixed(2) : "") +
-                "\n";
-        }
+                  for (var i = 0; i < times.length; i++) {
+                      text +=
+                          times[i].toFixed(2) + "," +
+                          temps[i].toFixed(2) + "," +
+                          (panelTemps[i] !== undefined ? panelTemps[i].toFixed(2) : "") +
+                          "\n";
+                  }
 
         var blob = new Blob([text], { type: "text/csv" });
         var link = document.createElement("a");
