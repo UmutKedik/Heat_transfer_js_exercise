@@ -65,7 +65,7 @@ class SolarTankSimulator {
                 totalE += Heat_input_from_solar * this.dt; // W*s = J
             }
             else {
-              PanelTemp = this.Daily_avg_temp; // <-- yeni
+              PanelTemp = this.Daily_avg_temp;
           }
 
             // heat go out when tank hotter than air
