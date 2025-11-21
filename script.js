@@ -294,7 +294,7 @@ class TankSimulationApp {
                     y: {
                         title: {
                             display: true,
-                            text: "Tank Temperature (°C)"
+                            text: "Temperature (°C)"
                         }
                     }
                 }
