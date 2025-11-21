@@ -9,8 +9,11 @@ class SolarTankSimulator {
         this.Simulation_hours = opts.Simulation_hours;
         this.basePanelEfficiency = opts.basePanelEfficiency;
         this.Solar_peak = opts.Solar_peak;
-        this.baseTankHeatLoss = opts.baseTankHeatLoss;
         this.Starting_tank_temp = opts.Starting_tank_temp;
+
+        // new inputs for automatic heat loss
+        this.Tank_area = opts.Tank_area;                       // m2
+        this.insulationThickness = opts.insulationThickness;   // m
 
         // constants
         this.dt = 60;                 // timestep in seconds (1 min)
@@ -70,12 +73,17 @@ class SolarTankSimulator {
 
             // heat go out when tank hotter than air
             const tempDifference = TankTemp - this.Daily_avg_temp;
-            let tankHeatLoss = this.baseTankHeatLoss;
+
+            // auto base heat-loss coefficient from area + insulation thickness
+             const lambda = 0.035; // W/mK (fixed average insulation conductivity)
+            let baseLossCoeff = (lambda / this.insulationThickness) * this.Tank_area; // W/K
+
+            let tankHeatLoss = baseLossCoeff;
 
             if (tempDifference > 0) {
                 let factor = (tempDifference / 40) * 0.5; // just guess curve
                 if (factor > 0.5) factor = 0.5;
-                tankHeatLoss = this.baseTankHeatLoss * (1 + factor);
+                tankHeatLoss = baseLossCoeff * (1 + factor);
             }
 
             const Heat_loss_to_environment = tankHeatLoss * tempDifference;
@@ -162,14 +170,18 @@ class TankSimulationApp {
         const Simulation_hours = parseFloat(this._val("simHours"));
         const basePanelEfficiency = parseFloat(this._val("baseEfficiency"));
         const Solar_peak = parseFloat(this._val("peakIrradiance"));
-        const baseTankHeatLoss = parseFloat(this._val("baseLoss"));
         const Starting_tank_temp = parseFloat(this._val("startingTemp"));
+
+        // new inputs
+        const Tank_area = parseFloat(this._val("tankArea"));
+        const insulationThickness = parseFloat(this._val("insulThk"));
 
         const arr = [
             Panel_area, Tank_Volume, Daily_avg_temp,
             Daily_sun_time_hours, Simulation_hours,
             basePanelEfficiency, Solar_peak,
-            baseTankHeatLoss, Starting_tank_temp
+            Starting_tank_temp,
+            Tank_area, insulationThickness
         ];
 
         if (arr.some(n => isNaN(n))) {
@@ -192,8 +204,12 @@ class TankSimulationApp {
             return { ok: false, message: "Peak irradiance must be more than zero." };
         }
 
-        if (baseTankHeatLoss <= 0) {
-            return { ok: false, message: "Heat loss coefficient must be > 0." };
+        if (Tank_area <= 0) {
+            return { ok: false, message: "Tank area must be > 0." };
+        }
+
+        if (insulationThickness <= 0) {
+            return { ok: false, message: "Insulation thickness must be > 0." };
         }
 
         return {
@@ -206,8 +222,11 @@ class TankSimulationApp {
                 Simulation_hours: Simulation_hours,
                 basePanelEfficiency: basePanelEfficiency,
                 Solar_peak: Solar_peak,
-                baseTankHeatLoss: baseTankHeatLoss,
-                Starting_tank_temp: Starting_tank_temp
+                Starting_tank_temp: Starting_tank_temp,
+
+                // new
+                Tank_area: Tank_area,
+                insulationThickness: insulationThickness
             }
         };
     }
@@ -294,7 +313,7 @@ class TankSimulationApp {
                     y: {
                         title: {
                             display: true,
-                            text: "Temperature (°C)"
+                            text: "Tank Temperature (°C)"
                         }
                     }
                 }
@@ -303,23 +322,26 @@ class TankSimulationApp {
     }
 
     // csv download
-    downloadCsv() {
-        if (!this.lastResult) {
-            alert("Please simulate first.");
-            return;
-        }
+  downloadCsv() {
+            if (!this.lastResult) {
+                alert("Please simulate first.");
+                return;
+            }
 
-        var r = this.lastResult;
+          var r = this.lastResult;
         var text = "time_hours,tank_temp_C,panel_temp_C\n";
 
         var times = r.timeHours || [];
-        var temps = r.temps || [];
-        var panelTemps = r.panelTemps || [];
+          var temps = r.temps || [];
+        var panelTemps = r.panelTemps || []; // include panel temps in csv
 
-        for (var i = 0; i < times.length; i++) {text += times[i].toFixed(2) + "," +temps[i].toFixed(2) + "," +
-        (r.panelTemps[i] !== undefined ? r.panelTemps[i].toFixed(2) : "") +
-        "\n";
-}
+        for (var i = 0; i < times.length; i++) {
+            text +=
+                times[i].toFixed(2) + "," +
+                temps[i].toFixed(2) + "," +
+                (panelTemps[i] !== undefined ? panelTemps[i].toFixed(2) : "") +
+                "\n";
+        }
 
         var blob = new Blob([text], { type: "text/csv" });
         var link = document.createElement("a");
@@ -360,4 +382,4 @@ class TankSimulationApp {
         document.addEventListener("DOMContentLoaded", startSimApp);
     }
 
-})();
+})(); 
