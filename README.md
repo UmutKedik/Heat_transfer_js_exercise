@@ -13,6 +13,8 @@ solar irradiance
 
 panel area
 
+tank area
+
 tank volume
 
 heat losses to environment
@@ -62,7 +64,11 @@ Enter panel area (m²)
 
 Enter tank volume (L)
 
+Enter tank area (m²)
+
 Enter starting tank temperature
+
+Enter isolation inputs
 
 Set average outdoor temp
 
@@ -84,16 +90,19 @@ temperature curve over the whole period
 ## 📐 Model Equations
 
 Solar irradiance:
-I(t) = I_peak * sin( π * (t_day / t_sun) )
+I(t) = I_peak * [ sin( PI * (t_day / t_sun) ) ]^1.3 * (1 - 0.15*r)
 
 Temperature-dependent efficiency:
-eta(T) = eta_base - 0.002 * (T - 25)
+eta(T_panel) = eta_base * (1 - 0.0035 * (T_panel - 25))
 
 Solar gain:
-Q_solar = A * I(t) * eta(T)
+Q_solar = A * I(t) * eta(T_panel)
 
 Heat loss:
-Q_loss = k * (T - T_amb)
+k_base = (lambda / d) * A_tank
+k_eff  = k_base * (1 + f)
+f      = min(0.5, (ΔT/40)*0.5)
+Q_loss = k_eff * (T - T_amb)
 
 Energy balance:
 T_new = T_old + (Q_solar - Q_loss) / (m * c_p) * dt
