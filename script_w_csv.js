@@ -305,19 +305,21 @@ class TankSimulationApp {
     // csv download
     downloadCsv() {
         if (!this.lastResult) {
-            alert("Once simule et, sonra indir.");
+            alert("Please simulate first.");
             return;
         }
 
         var r = this.lastResult;
-        var text = "time_hours,tank_temp_C\n,panel_temp_C\n";
+        var text = "time_hours,tank_temp_C,panel_temp_C\n";
 
         var times = r.timeHours || [];
         var temps = r.temps || [];
+        var panelTemps = r.panelTemps || [];
 
-        for (var i = 0; i < times.length; i++) {
-            text += times[i].toFixed(2) + "," + temps[i].toFixed(2) + "\n";
-        }
+        for (var i = 0; i < times.length; i++) {text += times[i].toFixed(2) + "," +temps[i].toFixed(2) + "," +
+        (r.panelTemps[i] !== undefined ? r.panelTemps[i].toFixed(2) : "") +
+        "\n";
+}
 
         var blob = new Blob([text], { type: "text/csv" });
         var link = document.createElement("a");
