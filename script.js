@@ -27,8 +27,13 @@ class SolarTankSimulator {
         let Pump_hours = 0;
         let t = 0;
 
+        let totalE = 0; // total collected energy (J)
+
         const timeHours = [];
         const temps = [];
+        
+        const panelTemps = [];
+          let PanelTemp = this.Daily_avg_temp;
 
         // basic time loop
         while (t <= sim_time) {
@@ -42,6 +47,8 @@ class SolarTankSimulator {
                 if (sunShape < 0) { sunShape = 0; }
 
                 const currentIrradiance = this.Solar_peak * sunShape;
+                
+                PanelTemp = this.Daily_avg_temp + (currentIrradiance / this.Solar_peak) * 30;
 
                 // panel make less good when temp high
                 let panelEfficiency =
@@ -54,7 +61,12 @@ class SolarTankSimulator {
                     this.Panel_area * currentIrradiance * panelEfficiency;
 
                 Pump_hours += this.dt / 3600;
+
+                totalE += Heat_input_from_solar * this.dt; // W*s = J
             }
+            else {
+              PanelTemp = this.Daily_avg_temp; // <-- yeni
+          }
 
             // heat go out when tank hotter than air
             const tempDifference = TankTemp - this.Daily_avg_temp;
@@ -75,7 +87,9 @@ class SolarTankSimulator {
             // save only one point each hour for chart, otherwise too heavy
             if ((t % 3600) === 0) {
                 timeHours.push(t / 3600);
+                
                 temps.push(TankTemp);
+                 panelTemps.push(PanelTemp);
             }
 
             t += this.dt;
@@ -86,7 +100,9 @@ class SolarTankSimulator {
             pumpHours: Pump_hours,
             hoursSimulated: this.Simulation_hours,
             timeHours: timeHours,
-            temps: temps
+            temps: temps,
+            totalE_kWh: totalE / 3600000,   // J> kWh
+            panelTemps: panelTemps,
         };
     }
 }
@@ -98,15 +114,23 @@ class TankSimulationApp {
         this.errorDiv = document.getElementById("error-message");
         this.resultsDiv = document.getElementById("results");
         this.runButton = document.getElementById("runButton");
+
+        this.lastResult = null;   // keep last simulation result for csv
     }
 
     init() {
         const btn = this.runButton;
-        if (!btn) return;
+        if (btn) {
+            // handler with bind
+            btn.addEventListener("click", this.handleRunClick.bind(this));
+        }
 
-        //handler with bind
-        btn.addEventListener("click", this.handleRunClick.bind(this));
-    }
+            // hook csv download button
+            const dlBtn = document.getElementById("downloadCsvButton");
+            if (dlBtn) {
+                dlBtn.addEventListener("click", this.downloadCsv.bind(this));
+            }
+        }
 
     handleRunClick() {
         if (this.errorDiv) this.errorDiv.textContent = "";
@@ -114,17 +138,20 @@ class TankSimulationApp {
 
         const inputResult = this.readAndValidateInputs();
 
-        if (!inputResult.ok) {
-            if (this.errorDiv) this.errorDiv.textContent = inputResult.message;
-            return;
-        }
+            if (!inputResult.ok) {
+                    if (this.errorDiv) this.errorDiv.textContent = inputResult.message;
+                    return;
+            }
 
         const simParams = inputResult.values;
         const sim = new SolarTankSimulator(simParams);
         const result = sim.run();
 
+        // remember last run for csv export
+        this.lastResult = result;
+
         this.showResults(result);
-        this.drawTemperatureChart(result.timeHours, result.temps);
+        this.drawTemperatureChart(result.timeHours, result.temps,result.panelTemps);
     }
 
     readAndValidateInputs() {
@@ -205,17 +232,24 @@ class TankSimulationApp {
             r.pumpHours.toFixed(2) +
             " hours</b> in total.";
 
+        const eText =
+            "Total collected energy: <b>" +
+            r.totalE_kWh.toFixed(2) +
+            " kWh</b>";
+
         if (this.resultsDiv) {
             this.resultsDiv.innerHTML =
                 "<h2>Results</h2><p>" +
                 finalText +
                 "</p><p>" +
                 pumpText +
+                "</p><p>" +
+                eText +
                 "</p>";
         }
     }
 
-    drawTemperatureChart(timeHours, temps) {
+    drawTemperatureChart(timeHours, temps,panelTemps) {
         const canvas = document.getElementById("tempChart");
         if (!canvas) return;
 
@@ -235,6 +269,11 @@ class TankSimulationApp {
                     label: "Tank Temperature (°C)",
                     data: temps,
                     fill: false
+                },
+                 {
+                  label: "Panel Temperature (°C)",
+                  data: panelTemps,
+                  fill: false
                 }]
             },
             options: {
@@ -261,6 +300,40 @@ class TankSimulationApp {
                 }
             }
         });
+    }
+
+    // csv download
+    downloadCsv() {
+        if (!this.lastResult) {
+            alert("Please simulate first.");
+            return;
+        }
+
+        var r = this.lastResult;
+        var text = "time_hours,tank_temp_C,panel_temp_C\n";
+
+        var times = r.timeHours || [];
+        var temps = r.temps || [];
+        var panelTemps = r.panelTemps || [];
+
+        for (var i = 0; i < times.length; i++) {text += times[i].toFixed(2) + "," +temps[i].toFixed(2) + "," +
+        (r.panelTemps[i] !== undefined ? r.panelTemps[i].toFixed(2) : "") +
+        "\n";
+}
+
+        var blob = new Blob([text], { type: "text/csv" });
+        var link = document.createElement("a");
+
+        link.href = URL.createObjectURL(blob);
+        link.download = "tank_simulation.csv";
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(function () {
+            URL.revokeObjectURL(link.href);
+        }, 1000);
     }
 }
 
