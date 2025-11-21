@@ -274,7 +274,7 @@ class TankSimulationApp {
         });
     }
 
-    // ---- JUNIOR STYLE CSV DOWNLOAD ----
+    // download csv ----
     downloadCsv() {
         if (!this.lastResult) {
             alert("Once simule et, sonra indir.");
@@ -301,7 +301,7 @@ class TankSimulationApp {
         link.click();
         document.body.removeChild(link);
 
-        // url temizle (basit)
+        // Clean URL
         setTimeout(function () {
             URL.revokeObjectURL(link.href);
         }, 1000);
